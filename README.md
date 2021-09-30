@@ -1,2 +1,2 @@
 # clubsoda
-Linear hypothesis tests for inference in clustered samples
+R package for linear hypothesis tests in clustered samples
