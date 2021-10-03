@@ -39,7 +39,7 @@ conf.interval.meis(
 \item{crve.type}{Type of cluster-robust variance estimator (CR0, CR1, CR2, CR3)}
 }
 \value{
-numeric, the probability that a test statistic with a magnitude of abs(t0) or greater is observed
+numeric, the lower and upper bound of the confidence interval
 }
 \description{
 This function calculates a confidence interval for the

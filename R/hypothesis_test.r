@@ -491,7 +491,7 @@ p.value.meis <- function(t0, data, x.names, cluster.id, weights=NULL, c0=NULL, t
 #' @param test.var Index of variable to test, either c0 or test.var must be supplied
 #' @param fe.id Name of fixed effect group id variable (defaults to cluster.id)
 #' @param crve.type Type of cluster-robust variance estimator (CR0, CR1, CR2, CR3)
-#' @return numeric, the probability that a test statistic with a magnitude of abs(t0) or greater is observed
+#' @return numeric, the lower and upper bound of the confidence interval
 #' @export
 conf.interval.meis <- function(data, y.name, x.names, cluster.id, alpha=0.05,
                          weights=NULL, c0=NULL, test.var=NULL,
