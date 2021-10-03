@@ -66,8 +66,20 @@ adjustment.matrices <- function(xg, xtx, delta=0.5) {
   return(a.g)
 }
 
-# a more straightforward calculation of adjustment.matrices(),
-# for testing to make sure that adjustment.matrices() is correct
+
+#' Adjustment Matrices
+#'
+#' This function gets adjustment matrices for the
+#' cluster-robust variance estimators CR2 and CR3
+#' from Bell and McCaffrey (2002). The is a more
+#' straightforward calculation of adjustment.matrices(),
+#' for testing to make sure that adjustment.matrices()
+#' is correct.
+#' 
+#' @param xg List of cluster-specific submatrices of design matrix
+#' @param xtx Inverse of design matrix squared
+#' @param delta Power to raise (I_g - H_gg), by default delta=0.5 for CR2
+#' @return A vector of eigenvalues
 adjustment.matrices.slow <- function(xg, xtx, delta=0.5) {
   a.g = Map(function(x){
     I_g = diag(nrow(x))
