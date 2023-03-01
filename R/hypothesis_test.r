@@ -403,7 +403,7 @@ absorb.reorg <- function(data, x.names, cluster.id, weights, fe.id, crve, y.name
     Y.g = lapply(seq_len(ngrp), function(x) as.matrix(Y[ind.lo[x]:ind.hi[x],, drop=F]))
     
     # absorb FE and apply weights
-    Ydw.g = Map(function(y, w){
+    Ydw.g = Map(function(x, w){
       x.new = x
       for(j in 1:ncol(x)){
         x.new[, j] = sqrt(w) * (x[, j] - (sum(w * x[, j]) / sum(w)))
