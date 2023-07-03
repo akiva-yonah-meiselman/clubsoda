@@ -21,9 +21,13 @@
 css.test.lambdas <- function(xg, xtx, c.0){
   # primitives
   MU = xtx %*% c.0
-  RHO_G = Map(function(x) (-1 / (nrow(x))), x=xg)
-  ETA_G = Map(function(x, rho) ((t(x) %*% x)), x=xg, rho=RHO_G) # eta
-  LAM_0 = Map(function(eta, rho) ((t(MU) %*% eta %*% MU)), eta=ETA_G, rho=RHO_G) # eta
+  RHO.h = Map(function(x){
+    return(  diag(nrow(x)) + ((-1 / (nrow(x))) * matrix(1, nrow(x), nrow(x)))  )
+  } , x=xg)
+  # ETA_G = Map(function(x, rho) ((t(x) %*% rho %*% x)), x=xg, rho=RHO_G) # eta
+  # LAM_0 = Map(function(eta, rho) ((t(MU) %*% eta %*% MU)), eta=ETA_G, rho=RHO_G) # eta
+  XMU = Map(function(x) (x %*% MU), x=xg)
+  LAM_0 = Map(function(x, rho) (diag(t(x) %*% rho %*% x)), x=XMU, rho=RHO.h)
   return(unlist(LAM_0))
 }
 
@@ -342,12 +346,12 @@ absorb.reorg <- function(data, x.names, cluster.id, weights, fe.id, crve, y.name
   groups.0 = as.data.frame(groups.0)
   
   # groups for clustering
-  groups.1 = data.0 %>%
+  clu.grps = data.0 %>%
     group_by(clu.var) %>%
     summarize(obs=sum(one),
               id.min=min(id),
               id.max=max(id))
-  groups.1 = as.data.frame(groups.1)
+  clu.grps = as.data.frame(clu.grps)
   
   ind.lo = groups.0$id.min
   ind.hi = groups.0$id.max
@@ -373,9 +377,9 @@ absorb.reorg <- function(data, x.names, cluster.id, weights, fe.id, crve, y.name
   XTX = t(Xdw) %*% Xdw
   XTX.inv = solve(XTX)
   
-  ind.lo = groups.1$id.min
-  ind.hi = groups.1$id.max
-  nclu = nrow(groups.1)
+  ind.lo = clu.grps$id.min
+  ind.hi = clu.grps$id.max
+  nclu = nrow(clu.grps)
   Xdw.h = lapply(seq_len(nclu), function(x) as.matrix(Xdw[ind.lo[x]:ind.hi[x],, drop=F]))
   
   if(crve == 'CR0'){
@@ -392,6 +396,7 @@ absorb.reorg <- function(data, x.names, cluster.id, weights, fe.id, crve, y.name
   model.0$Xdw.h = Xdw.h
   model.0$XTX.inv = XTX.inv
   model.0$A.h = A.h
+  model.0$clu.grps = clu.grps
   
   if(!is.null(y.name)){
     Y = as.matrix(data.0[, y.name, drop=F])
@@ -412,9 +417,9 @@ absorb.reorg <- function(data, x.names, cluster.id, weights, fe.id, crve, y.name
     }, x=Y.g, w=W.g)
     Ydw = do.call(rbind, Ydw.g)
     
-    ind.lo = groups.1$id.min
-    ind.hi = groups.1$id.max
-    nclu = nrow(groups.1)
+    ind.lo = clu.grps$id.min
+    ind.hi = clu.grps$id.max
+    nclu = nrow(clu.grps)
     Ydw.h = lapply(seq_len(nclu), function(x) as.matrix(Ydw[ind.lo[x]:ind.hi[x],, drop=F]))
     
     model.0$Ydw.h = Ydw.h
@@ -555,3 +560,89 @@ conf.interval.meis <- function(data, y.name, x.names, cluster.id, alpha=0.05,
   return(ci.0)
 }
 
+
+#' OLS with a standard battery of tests
+#'
+#' This function calculates OLS, gets cluster-robust standard errors (CR0),
+#' and tests a linear hypothesis for each covariate three ways:
+#' assuming the t-stat is normal, assuming the t-stat is t-distributed with
+#' degrees of freedom equal to the effective number of clusters, and
+#' according to Meiselman (2021).
+#'
+#' @param data Data frame or matrix containing all outcomes, covariates, and group ids
+#' @param y.name Name of dependent variable
+#' @param x.names Vector of covariate names
+#' @param cluster.id Name of cluster id variable
+#' @param weights Name of weight variable, if applicable
+#' @param fe.id Name of fixed effect group id variable (defaults to cluster.id)
+#' @return numeric, the lower and upper bound of the confidence interval
+ols.with.the.works <- function(data, y.name, x.names, cluster.id, weights=NULL, fe.id=cluster.id){
+  # 
+  # reorder data
+  # 
+  model.0 = absorb.reorg(data=data, x.names=x.names,
+                         cluster.id=cluster.id, fe.id=fe.id, weights=weights, crve='CR0', y.name=y.name)
+  
+  data.0 = data
+  if(!is.null(weights)){
+    data.0$reg.weights = data.0[, weights]
+  }else{
+    data.0$reg.weights = 1
+  }
+  W = as.matrix(data.0[, 'reg.weights', drop=F])
+  Y = as.matrix(data.0[, c(y.name), drop=F])
+  X = as.matrix(data.0[, c(x.names), drop=F])
+  Xdw.h = model.0$Xdw.h
+  Ydw.h = model.0$Ydw.h
+  Xdw = do.call(rbind, Xdw.h)
+  Ydw = do.call(rbind, Ydw.h)
+  
+  
+  XTY = t(Xdw) %*% Ydw
+  Bhat = model.0$XTX.inv %*% XTY
+  Ehat = Y - (X %*% Bhat)
+  Ew = Ehat * sqrt(W)
+  
+  #
+  # Cluster-robust standard errors
+  # 
+  
+  ind.lo = model.0$clu.grps$id.min
+  ind.hi = model.0$clu.grps$id.max
+  ngrp = nrow(model.0$clu.grps)
+  Ew.h = lapply(seq_len(ngrp), function(x) as.matrix(Ew[ind.lo[x]:ind.hi[x],, drop=F]))
+  
+  XeeX.h = Map(function(x, e){
+    xe = t(x) %*% e
+    return(xe %*% t(xe))
+  }, x=Xdw.h, e=Ew.h)
+  XeeX = Reduce('+', XeeX.h)
+  V = model.0$XTX.inv %*% XeeX %*% model.0$XTX.inv
+  SE = sqrt(diag(V))
+  
+  coeff.0 = data.frame(b=c(Bhat), se.cr0=c(SE), t.stat=c(Bhat)/c(SE))
+  coeff.0$se.cr1 = coeff.0$se.cr0 * sqrt(ngrp/(ngrp - 1))
+  
+  #
+  # Effective number of clusters
+  # for one linear hypothesis on each covariate
+  #
+  
+  c0 = rep(0, length(x.names))
+  for(i in 1:length(x.names)){
+    c1 = c0
+    c1[i] = 1
+    c2 = t(t(c1))
+    lam.0 = css.test.lambdas(Xdw.h, model.0$XTX.inv, c2)
+    g.star = (sum(lam.0) ^ 2) / (sum(lam.0 ^ 2))
+    coeff.0[i, 'g.star'] = g.star
+    
+    t0 = coeff.0[i, 't.stat']
+    m1 = meis.test.lambdas.1(model.0$Xdw.h, model.0$XTX.inv, model.0$A.h, c2)
+    coeff.0[i, 'p.norm'] = (1 - pnorm(abs(t0))) / 2
+    coeff.0[i, 'p.css'] = (1 - pt(t0, df=g.star)) / 2
+    coeff.0[i, 'p.meis'] = p.meis(m1, c2, t0)
+  }
+  
+  return(coeff.0)
+}
