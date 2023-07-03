@@ -50,7 +50,7 @@ bm.test.lambdas <- function(xg, xtx, ag, c.0){
   # primitives
   MU = xtx %*% c.0
   DELTA_G = Map(function(x, a) (t(x) %*% t(a) %*% x), x=xg, a=ag) # delta
-  ETA_G = Map(function(x, rho) ((t(x) %*% x)), x=xg, rho=RHO_G) # eta
+  ETA_G = Map(function(x, rho) ((t(x) %*% x)), x=xg) # eta
   
   MUPHIMU_G = Map(function(x, a){
     mpm.0 = (t(a) %*% (x %*% MU))
