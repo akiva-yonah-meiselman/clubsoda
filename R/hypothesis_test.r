@@ -553,7 +553,8 @@ ols.with.the.works <- function(data, y.name, x.names, cluster.id, weights=NULL, 
   XTY = t(Xdw) %*% Ydw
   Bhat = model.0$XTX.inv %*% XTY
   Ehat = Y - (X %*% Bhat)
-  Ew = Ehat * sqrt(W)
+  # Ew = Ehat * sqrt(W)
+  Ew = Ehat
   
   #
   # Cluster-robust standard errors
