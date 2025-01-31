@@ -478,7 +478,7 @@ conf.interval.meis <- function(data, y.name, x.names, cluster.id, alpha=0.05,
     stop("conf.interval.meis() error: alpha must be in (0,1)")
   }
   
-  model.0 = absorb.reorg(data, x.names, cluster.id, weights, fe.id, crve)
+  model.0 = absorb.reorg(data, x.names, cluster.id, weights, fe.id, crve, y.name=y.name)
   Xdw = do.call(rbind, model.0$Xdw.h)
   Ydw = do.call(rbind, model.0$Ydw.h)
   # OLS
