@@ -499,7 +499,7 @@ conf.interval.meis <- function(data, y.name, x.names, cluster.id, alpha=0.05,
   # q.star = q.meis(m1, c2, alpha=alpha)
   
   lambdas = bm.test.lambdas(model.0$Xdw.h, model.0$XTX.inv, model.0$A.h, c2, atype='NAAMW')
-  q.star = q.meis(model.0$XTX.inv, c2, alpha=alpha/2, lambdas=lambdas)
+  q.star = q.meis(model.0$XTX.inv, c2, alpha=alpha, lambdas=lambdas)
   
   
   #
