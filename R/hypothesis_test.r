@@ -18,18 +18,30 @@
 #' @param xtx Inverse of design matrix squared
 #' @param c.0 Linear hypothesis vector
 #' @return A vector of eigenvalues
-css.test.lambdas <- function(xg, xtx, c.0){
-  # primitives
+css.test.gammas <- function(xg, xtx, c.0){
   MU = xtx %*% c.0
-  RHO.h = Map(function(x){
-    return(  diag(nrow(x)) + ((-1 / (nrow(x))) * matrix(1, nrow(x), nrow(x)))  )
-  } , x=xg)
-  # ETA_G = Map(function(x, rho) ((t(x) %*% rho %*% x)), x=xg, rho=RHO_G) # eta
-  # LAM_0 = Map(function(eta, rho) ((t(MU) %*% eta %*% MU)), eta=ETA_G, rho=RHO_G) # eta
-  XMU = Map(function(x) (x %*% MU), x=xg)
-  LAM_0 = Map(function(x, rho) (diag(t(x) %*% rho %*% x)), x=XMU, rho=RHO.h)
-  return(unlist(LAM_0))
+  gamma = Map(function(x){
+    return(t(MU) %*% (t(x) %*% x) %*% MU)
+  }, x=xg)
+  
+  return(unlist(gamma))
 }
+
+#' Degrees of freedom for CSS Test
+#'
+#' This function gets G*, the degrees of freedom for a test based on
+#' Carter, Schnepel, and Steigerwald (2017).
+#'
+#' @param xg List of cluster-specific submatrices of design matrix
+#' @param xtx Inverse of design matrix squared
+#' @param c.0 Linear hypothesis vector
+#' @return A scalar degrees of freedom
+css.test.gstar <- function(xg, xtx, c.0){
+  gamma = css.test.gammas(xg, xtx, c.0)
+  gstar = (sum(gamma)^2) / sum(gamma^2)
+  return(gstar)
+}
+
 
 
 # 
@@ -43,97 +55,60 @@ css.test.lambdas <- function(xg, xtx, c.0){
 #'
 #' @param xg xg List of cluster-specific submatrices of design matrix
 #' @param xtx Inverse of design matrix squared
-#' @param ag List of adjustment matrices
+#' @param ag List of adjustment matrices, either from Bell and McCaffrey (2002) or from Niccodemi et al. (2020)
 #' @param c.0 Linear hypothesis vector
 #' @return A vector of eigenvalues
-bm.test.lambdas <- function(xg, xtx, ag, c.0){
-  # primitives
+bm.test.lambdas <- function(xg, xtx, ag, c.0, atype='NAAMW', xgtxg=NULL){
   MU = xtx %*% c.0
-  DELTA_G = Map(function(x, a) (t(x) %*% t(a) %*% x), x=xg, a=ag) # delta
-  ETA_G = Map(function(x, rho) ((t(x) %*% x)), x=xg) # eta
   
-  MUPHIMU_G = Map(function(x, a){
-    mpm.0 = (t(a) %*% (x %*% MU))
-    mpm.1 = t(mpm.0) %*% mpm.0
-    return(mpm.1)
-  }, x=xg, a=ag) # mu phi mu
-  
-  # transformations
-  V.0 = xtx %*% Reduce('+', ETA_G) %*% xtx # v
-  Delta.0 = Map(function(delta) (delta %*% MU), delta=DELTA_G) # delta mu
-  Theta.0 = Map(function(delta) (xtx %*% (delta) %*% MU),
-                delta=DELTA_G) # XTX theta mu
-  
-  # big matrices
-  Delta.1 = do.call(cbind, Delta.0) # Delta
-  Theta.1 = do.call(cbind, Theta.0) # Omega
-  Phi.1 = diag(unlist(MUPHIMU_G))
-  
-  DOD.0 = (t(Delta.1) %*% V.0 %*% Delta.1) + Phi.1 - ((t(Delta.1) %*% Theta.1) + (t(Theta.1) %*% Delta.1))
-  DOD.1 = zapsmall(DOD.0)
-  lam.0 = eigen(DOD.0)$values
-  
-  if(sum(abs(Im(lam.0))) > (max(abs(Re(lam.0))) * 10^(-10))){
-    stop('bm.test.lambdas(): complex eigenvalues error')
+  if(atype == 'NAAMW'){
+    if(is.null(xgtxg)){
+      xgtxg = Map(function(x) (t(x) %*% x), x=xg) # eta
+    }
+    delta_g = Map(function(x, a) (x %*% a %*% MU), x=xgtxg, a=ag)
+    omega_g = Map(function(d, a) (t(MU) %*% t(a) %*% d), d=delta_g, a=ag)
+  }else if(atype == 'BM'){
+    # xgtaaxg = Map(function(x, a) (t(x) %*% a %*% a %*% x), x=xg, a=ag)
+    delta_g = Map(function(x, a) (t(x) %*% a %*% x %*% MU), x=xg, a=ag)
+    omega_g = Map(function(x, a) (t(MU) %*% t(x) %*% a %*% a %*% x %*% MU), x=xg, a=ag)
   }else{
-    lam.0 = Re(lam.0)
+    stop('need proper atype')
   }
   
-  return(lam.0)
+  Delta.0 = do.call(cbind, delta_g)
+  Omega.0 = diag(unlist(omega_g))
+  
+  ODD.0 = Omega.0 - (t(Delta.0) %*% xtx %*% Delta.0)
+  
+  lambda.0 = eigen(ODD.0)$values
+  
+  if(sum(abs(Im(lambda.0))) > (max(abs(Re(lambda.0))) * 10^(-10))){
+    stop('bm.test.lambdas(): complex eigenvalues error')
+  }else{
+    lambda.0 = Re(lambda.0)
+  }
+  
+  return(lambda.0)
 }
 
 
-# 
-# Meiselman test
-# 
 
-#' Eigenvalues for Meiselman Test
+#' Degrees of freedom for BM Test
 #'
-#' This function gets an intermediate thing for the eigenvalues
-#' for a test based on Meiselman (2021).
+#' This function gets m, the degrees of freedom for a test based on
+#' Bell and McCaffrey (2002).
 #'
-#' @param xg List of cluster-specific submatrices of design matrix
+#' @param xg xg List of cluster-specific submatrices of design matrix
 #' @param xtx Inverse of design matrix squared
+#' @param ag List of adjustment matrices, either from Bell and McCaffrey (2002) or from Niccodemi et al. (2020)
 #' @param c.0 Linear hypothesis vector
-#' @return A list containing two principal submatrices of the key matrix
-meis.test.lambdas.1 <- function(xg, xtx, ag, c.0){
-  # primitives
-  MU = xtx %*% c.0
-  DELTA_G = Map(function(x, a) (t(x) %*% t(a) %*% x), x=xg, a=ag) # delta
-  MUPHIMU_G = Map(function(x, a){
-    mpm.0 = (t(a) %*% (x %*% MU))
-    mpm.1 = t(mpm.0) %*% mpm.0
-    return(mpm.1)
-  }, x=xg, a=ag) # mu phi mu
-  
-  # transformations
-  Delta.0 = Map(function(delta) (t(MU) %*% delta), delta=DELTA_G)
-  
-  # big matrices
-  Delta.1 = do.call(rbind, Delta.0) # Delta
-  Phi.1 = diag(unlist(MUPHIMU_G))
-  DOD.0 = Phi.1 - (Delta.1 %*% xtx %*% t(Delta.1))
-  
-  ret = list()
-  ret$dod = DOD.0
-  ret$v = t(c.0) %*% xtx %*% c.0
-  return(ret)
+#' @return A vector of eigenvalues
+bm.test.df <- function(xg, xtx, ag, c.0, atype='BM', xgtxg=NULL){
+  lam = bm.test.lambdas(xg, xtx, ag, c.0, atype=atype, xgtxg=xgtxg)
+  m = (sum(lam)^2) / sum(lam^2)
+  return(m)
 }
 
-#' Eigenvalues for Meiselman Test
-#'
-#' This function gets the eigenvalues for a test based on
-#' Meiselman (2021).
-#'
-#' @param m1 A list containing two principal submatrices of the key matrix
-#' @param c.0 Linear hypothesis vector
-#' @param q Desired quantile
-#' @return A vector of eigenvalues
-meis.test.lambdas.2 <- function(m1, c.0, q){
-  w.13 = -(m1$v) / (q ^ 2) # -fT Om f / (z^2)
-  lam.0 = c(eigen(m1$dod)$values, w.13)
-  return(lam.0)
-}
 
 #' P-Value for Meiselman Test
 #'
@@ -144,13 +119,19 @@ meis.test.lambdas.2 <- function(m1, c.0, q){
 #' @param c.0 Linear hypothesis vector
 #' @param q Desired quantile
 #' @return Probability that abs(test statistic) is greater than q
-p.meis <- function(m1, c.0, q){
-  lam.1 = meis.test.lambdas.2(m1, c.0, q)
-  if(sum(abs(Im(lam.1))) > (max(abs(Re(lam.1))) * 10^(-10))){
-    stop('p.meis(): complex eigenvalues error')
-  }else{
-    lam.1 = Re(lam.1)
+p.meis <- function(xtx, c.0, q,
+                   lambdas=NULL, design.info=NULL){
+  if(is.null(lambdas)){
+    if(is.null(design.info)){
+      stop('need lambdas or design.info')
+    }else{
+      lambdas = bm.test.lambdas(design.info$xg, xtx, design.info$ag, c.0,
+                                atype=design.info$atype, xgtxg=design.info$xgtxg)
+    }
   }
+  
+  lam.0 = -t(c.0) %*% xtx %*% c.0 / (q^2)
+  lam.1 = c(lam.0, lambdas)
   lam.2 = lam.1 / sum(abs(lam.1))
   p.ret = 1 - CompQuadForm::imhof(0, lam.2)$Qq
   return(p.ret)
@@ -165,9 +146,11 @@ p.meis <- function(m1, c.0, q){
 #' @param c.0 Linear hypothesis vector
 #' @param q Desired quantile
 #' @return Critical value for a test with size alpha
-q.meis <- function(m1, c.0, alpha=0.05){
+q.meis <- function(xtx, c.0, alpha=0.05,
+                   lambdas=NULL, design.info=NULL){
   f1 <- function(q){
-    p.curr = p.meis(m1, c.0, q)
+    p.curr = p.meis(xtx, c.0, q,
+                    lambdas=lambdas, design.info=design.info)
     p.diff = p.curr - alpha
     return(p.diff)
   }
@@ -176,44 +159,6 @@ q.meis <- function(m1, c.0, alpha=0.05){
   return(q.ret)
 }
 
-
-
-# slower but more straightforward, for testing
-
-#' Eigenvalues for Meiselman Test
-#'
-#' This function gets the eigenvalues for a test based on
-#' Meiselman (2021).
-#'
-#' @param xg List of design matrix, separated by cluster
-#' @param xtx Inverse of design matrix squared
-#' @param c.0 Linear hypothesis vector
-#' @return A vector of eigenvalues
-meis.test.lambdas.slow <- function(xtx, ag, c.0, t.0, omg, xs, ihg, ind.hi, ind.lo,
-                                   D0=NULL){
-  X_g = lapply(seq_len(length(ind.hi)), function(x) as.matrix(xs[ind.lo[x]:ind.hi[x],]))
-
-  f.0 = xs %*% (xtx %*% c.0)
-  f.1 = f.0 / t.0
-  
-  if(is.null(D0)){
-    D_0 <- Map(function(x, a, ih) (t(ih) %*% (t(a) %*% (x %*% (xtx %*% c.0)))),
-               x=X_g, a=ag, ih=ihg)
-    D_1 = do.call(cbind, D_0)
-  }else{
-    D_1 = D0
-  }
-  D_2 = cbind(f.1, D_1)
-  D_3 = cbind(-f.1, D_1)
-
-  D_4 = lapply(seq_len(length(ind.hi)), function(x) as.matrix(D_2[ind.lo[x]:ind.hi[x],]))
-  D_5 = lapply(seq_len(length(ind.hi)), function(x) as.matrix(D_3[ind.lo[x]:ind.hi[x],]))
-  D_6 = Map(function(d4, d5, om) (t(d4) %*% om %*% d5),
-            d4=D_4, d5=D_5, om=omg)
-  D_7 = Reduce('+', D_6)
-  ll = eigen(D_7)$values
-  return(ll)
-}
 
 #' Test Parameters
 #'
@@ -383,11 +328,11 @@ absorb.reorg <- function(data, x.names, cluster.id, weights, fe.id, crve, y.name
   Xdw.h = lapply(seq_len(nclu), function(x) as.matrix(Xdw[ind.lo[x]:ind.hi[x],, drop=F]))
   
   if(crve == 'CR0'){
-    A.h = Map(function(x) (diag(nrow(x))), x=Xdw.h)
+    A.h = Map(function(x) (diag(ncol(x))), x=Xdw.h)
   }else if(crve == 'CR2'){
-    A.h = adjustment.matrices(Xdw.h, XTX.inv, delta=0.5)
+    A.h = adjustment.matrices.NAAMW(Xdw.h, XTX.inv, delta=-0.5)
   }else if(crve == 'CR3'){
-    A.h = adjustment.matrices(Xdw.h, XTX.inv, delta=1)
+    A.h = adjustment.matrices.NAAMW(Xdw.h, XTX.inv, delta=-1)
   }else{
     stop("p.value.meis() error: wrong crve.type")
   }
@@ -474,8 +419,10 @@ p.value.meis <- function(t0, data, x.names, cluster.id, weights=NULL, c0=NULL, t
   # pass inputs to other functions
   #
   c2 = t(t(c1))
-  m1 = meis.test.lambdas.1(model.0$Xdw.h, model.0$XTX.inv, model.0$A.h, c2)
-  p0 = p.meis(m1, c2, t1)
+  # m1 = meis.test.lambdas.1(model.0$Xdw.h, model.0$XTX.inv, model.0$A.h, c2)
+  # p0 = p.meis(m1, c2, t1)
+  lambdas = bm.test.lambdas(model.0$Xdw.h, model.0$XTX.inv, model.0$A.h, c2, atype='NAAMW')
+  p0 = p.meis(model.0$XTX.inv, c2, t1, lambdas=lambdas)
   return(p0)
 }
 
@@ -509,7 +456,7 @@ conf.interval.meis <- function(data, y.name, x.names, cluster.id, alpha=0.05,
   
   # does data have dependent variable
   if(!(y.name %in% colnames(data))){
-    stop(paste(calling.function, 'error: y.anme not in data'))
+    stop(paste(calling.function, 'error: y.name not in data'))
   }
   
   if(!is.null(c0)){
@@ -539,7 +486,8 @@ conf.interval.meis <- function(data, y.name, x.names, cluster.id, alpha=0.05,
   B.hat = model.0$XTX.inv %*% XTY
   # CRVE
   Eh_h = Map(function(x, y) (y - x %*% B.hat), x=Xdw.h, y=Ydw.h)
-  VAR_0 = Map(function(x, eh) ((t(x) %*% eh) %*% (t(eh) %*% x)), x=Xdw.h, eh=Eh.h)
+  VAR_0 = Map(function(x, eh) (t(a) %*% (t(x) %*% eh) %*% (t(eh) %*% x) %*% a),
+              x=Xdw.h, eh=Eh.h, a=model.0$A.h)
   VAR_1 = Reduce('+', VAR_0)
   VAR_2 = model.0$XTX.inv %*% VAR_1 %*% model.0$XTX.inv
   
@@ -547,8 +495,12 @@ conf.interval.meis <- function(data, y.name, x.names, cluster.id, alpha=0.05,
   # pass inputs to other functions
   #
   c2 = t(t(c1))
-  m1 = meis.test.lambdas.1(model.0$Xdw.h, model.0$XTX.inv, model.0$A.h, c2)
-  q.star = q.meis(m1, c2, alpha=alpha)
+  # m1 = meis.test.lambdas.1(model.0$Xdw.h, model.0$XTX.inv, model.0$A.h, c2)
+  # q.star = q.meis(m1, c2, alpha=alpha)
+  
+  lambdas = bm.test.lambdas(model.0$Xdw.h, model.0$XTX.inv, model.0$A.h, c2, atype='NAAMW')
+  q.star = q.meis(model.0$XTX.inv, c2, alpha=alpha, lambdas=lambdas)
+  
   
   #
   # Construct confidence interval
@@ -638,10 +590,13 @@ ols.with.the.works <- function(data, y.name, x.names, cluster.id, weights=NULL, 
     coeff.0[i, 'g.star'] = g.star
     
     t0 = coeff.0[i, 't.stat']
-    m1 = meis.test.lambdas.1(model.0$Xdw.h, model.0$XTX.inv, model.0$A.h, c2)
+    # m1 = meis.test.lambdas.1(model.0$Xdw.h, model.0$XTX.inv, model.0$A.h, c2)
+    
+    lambdas = bm.test.lambdas(model.0$Xdw.h, model.0$XTX.inv, model.0$A.h, c2, atype='NAAMW')
+    
     coeff.0[i, 'p.norm'] = (1 - pnorm(abs(t0))) / 2
     coeff.0[i, 'p.css'] = (1 - pt(t0, df=g.star)) / 2
-    coeff.0[i, 'p.meis'] = p.meis(m1, c2, t0)
+    coeff.0[i, 'p.meis'] = p.meis(model.0$XTX.inv, c2, t0, lambdas=lambdas)
   }
   
   return(coeff.0)

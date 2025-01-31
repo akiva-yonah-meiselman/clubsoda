@@ -28,63 +28,45 @@ matrix_power <- function(x, p, symmetric = TRUE, tol = -12) {
 #'
 #' This function gets adjustment matrices for the
 #' cluster-robust variance estimators CR2 and CR3
-#' from Bell and McCaffrey (2002).
-#' 
-#' @param xg List of cluster-specific submatrices of design matrix
+#' from Bell and McCaffrey (2002). The adjustment
+#' matrices are given by Niccodemi et al (2020)
+#' to be calculated much faster than those in BM.
+#' @param xg xg List of cluster-specific submatrices of design matrix
 #' @param xtx Inverse of design matrix squared
-#' @param delta Power to raise (I_g - H_gg), by default delta=0.5 for CR2
-#' @return A vector of eigenvalues
-adjustment.matrices <- function(xg, xtx, delta=0.5) {
+#' @param delta Power to raise (I_g - H_gg), by default delta=-0.5 for CR2
+#' @return A vector of eigenvalues, first not yet scaled by q
+adjustment.matrices.NAAMW <- function(xg, xtx, delta=-0.5, xgtxg=NULL){
+  if(is.null(xgtxg)){
+    xgtxg = Map(function(x) (t(x) %*% x), x=xg)
+  }
   
-  xtx.2 = matrix_power(xtx, p=0.5)
-  
-  a.g = Map(function(x){
-    if(ncol(x) < nrow(x)){
-      # eigendecompose the inside-out hat submatrix
-      h.0 = eigen(xtx.2 %*% (t(x) %*% x) %*% xtx.2)
-      h.00 = h.0$values[zapsmall(h.0$values) != 0]
-      h.01 = as.matrix(h.0$vectors[, zapsmall(h.0$values) != 0])
-      # orthonormal basis for the inside-out hat submatrix
-      h.02 = diag(x=h.00 ^ (-0.5), nrow=length(h.00))
-      h.1 = x %*% (xtx.2 %*% (h.01) %*% h.02)
-      # orthonormal basis for the hat submatrix, H_gg
-      h.2 = cbind(h.1, pracma::nullspace(t(h.1)))
-      # eigenvalues of (I_g - H_gg)^delta
-      h.3 = 1 - c(h.00, rep(0, nrow(x) - length(h.00)))
-      h.4 = ifelse(zapsmall(h.3) == 0, 0, h.3 ^ -delta)
-      # basis %*% values %*% basis, but faster
-      h.5 = sapply(1:ncol(h.2),function(k) h.2[,k] * h.4[k])
-      h.6 = h.2 %*% t(h.5)
-      return(h.6)
-    }else{
-      I_g = diag(nrow(x))
-      H_gg = x %*% xtx %*% t(x)
-      a = matrix_power(I_g - H_gg, p=-delta)
-      return(a)
-    }
-  }, x=xg)
-  return(a.g)
+  xtx.inv.half = clubsoda:::matrix_power(xtx, p=0.5)
+  xtx.half = solve(xtx.inv.half)
+  ik = diag(ncol(xtx))
+  ag = Map(function(x){
+    meat.0 = (ik - ( xtx.inv.half %*% x %*% xtx.inv.half ))
+    meat.1 = clubsoda:::matrix_power(meat.0, p=delta)
+    return(xtx.inv.half %*% meat.1 %*% xtx.half)
+  }, x=xgtxg)
+  return(ag)
 }
-
 
 #' Adjustment Matrices
 #'
 #' This function gets adjustment matrices for the
 #' cluster-robust variance estimators CR2 and CR3
-#' from Bell and McCaffrey (2002). The is a more
-#' straightforward calculation of adjustment.matrices(),
-#' for testing to make sure that adjustment.matrices()
-#' is correct.
+#' from Bell and McCaffrey (2002). The is a
+#' straightforward calculation of A_g.
 #' 
 #' @param xg List of cluster-specific submatrices of design matrix
 #' @param xtx Inverse of design matrix squared
 #' @param delta Power to raise (I_g - H_gg), by default delta=0.5 for CR2
 #' @return A vector of eigenvalues
-adjustment.matrices.slow <- function(xg, xtx, delta=0.5) {
+adjustment.matrices.BM <- function(xg, xtx, delta=-0.5) {
   a.g = Map(function(x){
     I_g = diag(nrow(x))
     H_gg = x %*% xtx %*% t(x)
-    a = matrix_power(I_g - H_gg, p=-delta)
+    a = matrix_power(I_g - H_gg, p=delta)
     return(a)
   }, x=xg)
   return(a.g)
