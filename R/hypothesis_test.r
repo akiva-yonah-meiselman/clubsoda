@@ -585,18 +585,21 @@ ols.with.the.works <- function(data, y.name, x.names, cluster.id, weights=NULL, 
     c1 = c0
     c1[i] = 1
     c2 = t(t(c1))
-    lam.0 = css.test.lambdas(Xdw.h, model.0$XTX.inv, c2)
-    g.star = (sum(lam.0) ^ 2) / (sum(lam.0 ^ 2))
+    gam.0 = css.test.gammas(Xdw.h, model.0$XTX.inv, c2)
+    g.star = (sum(gam.0) ^ 2) / (sum(gam.0 ^ 2))
     coeff.0[i, 'g.star'] = g.star
     
     t0 = coeff.0[i, 't.stat']
     # m1 = meis.test.lambdas.1(model.0$Xdw.h, model.0$XTX.inv, model.0$A.h, c2)
     
     lambdas = bm.test.lambdas(model.0$Xdw.h, model.0$XTX.inv, model.0$A.h, c2, atype='NAAMW')
+    df.bm = (sum(lambdas) ^ 2) / (sum(lambdas ^ 2))
+    coeff.0[i, 'df.bm'] = df.bm
     
     coeff.0[i, 'p.norm'] = (1 - pnorm(abs(t0))) / 2
     coeff.0[i, 'p.css'] = (1 - pt(t0, df=g.star)) / 2
     coeff.0[i, 'p.meis'] = p.meis(model.0$XTX.inv, c2, t0, lambdas=lambdas)
+    
   }
   
   return(coeff.0)
