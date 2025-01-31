@@ -485,7 +485,7 @@ conf.interval.meis <- function(data, y.name, x.names, cluster.id, alpha=0.05,
   XTY = t(Xdw) %*% Ydw
   B.hat = model.0$XTX.inv %*% XTY
   # CRVE
-  Eh_h = Map(function(x, y) (y - x %*% B.hat), x=Xdw.h, y=Ydw.h)
+  Eh_h = Map(function(x, y) (y - x %*% B.hat), x=model.0$Xdw.h, y=model.0$Ydw.h)
   VAR_0 = Map(function(x, eh) (t(a) %*% (t(x) %*% eh) %*% (t(eh) %*% x) %*% a),
               x=Xdw.h, eh=Eh.h, a=model.0$A.h)
   VAR_1 = Reduce('+', VAR_0)
