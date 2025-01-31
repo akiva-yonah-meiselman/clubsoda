@@ -237,9 +237,9 @@ test.params <- function(data, x.names, cluster.id, weights=NULL, c0=NULL,
     }
   }
   
-  if(!(crve.type %in% c('CR0', 'CR1', 'CR2', 'CR3'))){
-    stop("p.value.meis() error: crve.type should be in (CR0, CR1, CR2, CR3)")
-  }
+  # if(!(crve.type %in% c('CR0', 'CR1', 'CR2', 'CR3'))){
+  #   stop("p.value.meis() error: crve.type should be in (CR0, CR1, CR2, CR3)")
+  # }
   
   return(T)
 }
