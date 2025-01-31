@@ -552,7 +552,7 @@ ols.with.the.works <- function(data, y.name, x.names, cluster.id, weights=NULL, 
   
   XTY = t(Xdw) %*% Ydw
   Bhat = model.0$XTX.inv %*% XTY
-  Ehat = Y - (X %*% Bhat)
+  Ehat = Ydw - (Xdw %*% Bhat)
   # Ew = Ehat * sqrt(W)
   Ew = Ehat
   
