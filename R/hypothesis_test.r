@@ -505,8 +505,8 @@ conf.interval.meis <- function(data, y.name, x.names, cluster.id, alpha=0.05,
   #
   # Construct confidence interval
   #
-  lb = (t(c2) %*% B.hat) - (q.star * (t(c2) %*% VAR_2 %*% c2))
-  ub = (t(c2) %*% B.hat) + (q.star * (t(c2) %*% VAR_2 %*% c2))
+  lb = (t(c2) %*% B.hat) - sqrt(q.star * (t(c2) %*% VAR_2 %*% c2))
+  ub = (t(c2) %*% B.hat) + sqrt(q.star * (t(c2) %*% VAR_2 %*% c2))
   ci.0 = c(lower.bound=lb, upper.bound=ub)
   
   return(ci.0)
