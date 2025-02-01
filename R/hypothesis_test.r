@@ -133,7 +133,13 @@ p.meis <- function(xtx, c.0, q,
   lam.0 = -t(c.0) %*% xtx %*% c.0 / (q^2)
   lam.1 = c(lam.0, lambdas)
   lam.2 = lam.1 / sum(abs(lam.1))
+  
+  ww = options('warn')$warn
+  options(warn=-1)
+  
   p.ret = 1 - CompQuadForm::imhof(0, lam.2)$Qq
+  options(warn=ww)
+  
   return(p.ret)
 }
 
